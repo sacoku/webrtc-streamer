@@ -55,10 +55,17 @@ int decodeRTPTransport(const std::map<std::string,std::string> & opts)
 	return rtptransport;
 }
 
-RTSPVideoCapturer::RTSPVideoCapturer(const std::string & uri, const std::map<std::string,std::string> & opts) 
-	: m_connection(m_env, this, uri.c_str(), decodeTimeoutOption(opts), decodeRTPTransport(opts), rtc::LogMessage::GetLogToDebug()<=3)
+#include <iostream>
+
+RTSPVideoCapturer::RTSPVideoCapturer(const std::string & uri, const std::map<std::string, std::string> & opts)
+	: m_connection(m_env, this, uri.c_str(), decodeTimeoutOption(opts), decodeRTPTransport(opts), rtc::LogMessage::GetLogToDebug() <= 3),
+	m_resolution{ 320, 180 }
 {
 	RTC_LOG(INFO) << "RTSPVideoCapturer" << uri ;
+	if (opts.find("width") != opts.end() && opts.find("height") != opts.end()) {
+		m_resolution.width = std::stoi(opts.at("width"));
+		m_resolution.height = std::stoi(opts.at("height"));
+	}
 }
 
 RTSPVideoCapturer::~RTSPVideoCapturer()
@@ -210,7 +217,6 @@ bool RTSPVideoCapturer::onData(const char* id, unsigned char* buffer, ssize_t si
 			RTC_LOG(LS_ERROR) << "RTSPVideoCapturer:onData cannot JPEG dimension";
 			res = -1;
 		}
-			    
 	}
 
 	return (res == 0);
@@ -263,11 +269,26 @@ int32_t RTSPVideoCapturer::Decoded(webrtc::VideoFrame& decodedImage)
 		RTC_LOG(LS_VERBOSE) << "RTSPVideoCapturer::Decoded interframe decode:" << periodDecode << " source:" << periodSource;
 		int64_t delayms = periodSource-periodDecode;
 		if ( (delayms > 0) && (delayms < 1000) ) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(delayms));			
+/* modify by sunghyun kim 2018/07/30 */
+/* usleep is not support in windows env */
+			//std::this_thread::sleep_for(std::chrono::microseconds(delayms * 1000));
+			std::this_thread::sleep_for(std::chrono::microseconds(delayms * 10));
 		}
 	}
+
+	webrtc::VideoFrame frame = decodedImage;
+	int stride_y = m_resolution.width;
+	int stride_uv = (m_resolution.width + 1) / 2;
+
+	rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(m_resolution.width, m_resolution.height, stride_y, stride_uv, stride_uv);
+	scaled_buffer->ScaleFrom(*decodedImage.video_frame_buffer()->ToI420());
+	frame = webrtc::VideoFrame(scaled_buffer,
+		decodedImage.timestamp(),
+		decodedImage.render_time_ms(),
+		webrtc::kVideoRotation_0);
 	
-	this->OnFrame(decodedImage, decodedImage.height(), decodedImage.width());
+	//this->OnFrame(decodedImage, decodedImage.height(), decodedImage.width());
+	this->OnFrame(frame, frame.width(), frame.height());
 	
 	previmagets = decodedImage.timestamp();
 	prevts = std::chrono::high_resolution_clock::now().time_since_epoch().count()/1000/1000;

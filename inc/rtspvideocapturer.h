@@ -25,6 +25,10 @@
 #include "media/engine/internaldecoderfactory.h"
 #include "api/video_codecs/video_decoder.h"
 
+struct _resolution {
+	int width;
+	int height;
+};
 
 class Frame
 {
@@ -70,7 +74,6 @@ class RTSPVideoCapturer : public cricket::VideoCapturer, public RTSPConnection::
 		
 		void DecoderThread();
 
-
 	private:
 		Environment                           m_env;
 		RTSPConnection                        m_connection;
@@ -82,6 +85,7 @@ class RTSPVideoCapturer : public cricket::VideoCapturer, public RTSPConnection::
 		std::mutex                            m_queuemutex;
 		std::condition_variable               m_queuecond;
 		std::thread                           m_decoderthread;
+		struct _resolution                    m_resolution;
 };
 
 
