@@ -3,10 +3,8 @@ cmake_minimum_required (VERSION 3.0.0)
 project (webrtc-streamer)
 
 # add by sunghyun kim
-STRING(REGEX REPLACE "\\\\" "/" WEBRTC_HOME "$ENV{WEBRTC_HOME}")
+STRING(REGEX REPLACE "\\\\" "/" WEBRTCROOT "$ENV{WEBRTC_HOME}")
 STRING(REGEX REPLACE "\\\\" "/" LIVE555_HOME "$ENV{LIVE555_HOME}")
-set (WEBRTCROOT ${WEBRTC_HOME})
-set (LIVE555ROOT ${LIVE555_HOME})
 
 set (CMAKE_BUILD_TYPE Release) 
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -37,14 +35,12 @@ endif(MSVC)
 # civetweb sources
 set (SOURCE ${SOURCE} civetweb/src/civetweb.c civetweb/src/CivetServer.cpp)
 
-# live555 - modify by sunghyun kim
-set (LIVEINCLUDE ${LIVE555_HOME}/groupsock/include ${LIVE555_HOME}/liveMedia/include ${LIVE555_HOME}/UsageEnvironment/include ${LIVE555_HOME}/BasicUsageEnvironment/include)
-set (LIVELIB ${LIVE555_HOME}/groupsock/libgroupsock.lib ${LIVE555_HOME}/liveMedia/libliveMedia.lib ${LIVE555_HOME}/UsageEnvironment/libUsageEnvironment.lib ${LIVE555_HOME}/BasicUsageEnvironment/libBasicUsageEnvironment.lib)
+# live555helper sources
 set (SOURCE ${SOURCE} live555helper/src/environment.cpp live555helper/src/SessionSink.cpp live555helper/src/rtspconnectionclient.cpp)
 
 # target
 add_executable (${PROJECT_NAME} ${SOURCE})
-target_include_directories(${PROJECT_NAME} PRIVATE inc civetweb/include ${LIVEINCLUDE} live555helper/inc) 
+target_include_directories(${PROJECT_NAME} PRIVATE inc civetweb/include live555helper/inc) 
 
 # thread
 find_package (Threads)
@@ -63,7 +59,18 @@ set (OBJS ${WEBRTCROOT}/out/Release/obj/third_party/jsoncpp/jsoncpp/json_value${
 add_library (webrtcextra STATIC ${OBJS} )	
 set_target_properties(webrtcextra PROPERTIES LINKER_LANGUAGE CXX)		
 find_library(WEBRTC_LIBRARY NAMES webrtc PATHS ${WEBRTCROOT}/out/Release/obj/)
-target_link_libraries (${PROJECT_NAME} ${WEBRTC_LIBRARY} ${LIVELIB} webrtcextra) 
+target_link_libraries (${PROJECT_NAME} ${WEBRTC_LIBRARY} webrtcextra) 
+
+# live555 - modify by sunghyun kim
+set (LIVE555_INC ${LIVE555_HOME}/groupsock/include ${LIVE555_HOME}/liveMedia/include ${LIVE555_HOME}/UsageEnvironment/include ${LIVE555_HOME}/BasicUsageEnvironment/include)
+foreach (library groupsock BasicUsageEnvironment UsageEnvironment liveMedia)
+    find_library(${library}_LIB NAMES lib${library} PATHS ${LIVE555_HOME}/${library})
+    if (${library}_LIB)
+        set(LIVE555_LIB "${${library}_LIB};${LIVE555_LIB}")
+    endif (${library}_LIB)
+endforeach (library)
+target_include_directories(${PROJECT_NAME} PRIVATE ${LIVE555_INC}) 
+target_link_libraries (${PROJECT_NAME} ${LIVE555_LIB})
 
 # compiler specific
 if (MSVC)
