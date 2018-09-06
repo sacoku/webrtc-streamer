@@ -8,6 +8,7 @@
 ** -------------------------------------------------------------------------*/
 
 #include <iostream>
+#include <fstream>
 
 #include "rtc_base/ssladapter.h"
 #include "rtc_base/thread.h"
@@ -20,6 +21,48 @@
 #include "getopt.h"
 #endif
 
+/**
+ * Load from Json File and insert VideoUrlList
+ * author : Sunghyun Kim
+ * date : 2018/08/06
+ */
+bool UrlLoadFromJsonFile(std::string & fileName, std::map<std::string, std::string> & videoList)
+{
+	std::string contents;
+	Json::Reader reader;
+	Json::Value  jroot;
+	
+	std::unique_ptr <std::ifstream, std::function<void(std::ifstream*)> > inFile(new std::ifstream(fileName, std::ios::in), [](std::ifstream *in) {
+		in->close();
+	});
+
+	if (inFile->fail()) {
+		std::cout << "can't read file : " << fileName << std::endl;
+		return false;
+	}
+
+	while (!inFile->eof()) {
+		char inBuf[sizeof(*inFile)];
+		inFile->getline(inBuf, (std::streamsize)sizeof(*inFile));
+		contents += inBuf;
+	}
+
+	if (!reader.parse(contents, jroot)) {
+		std::cout << "json file parsing failed." << std::endl;
+		return false;
+	}
+
+	Json::Value jUrls;
+	jUrls = jroot.get("urls", jUrls);
+	
+	std::for_each(jUrls.begin(), jUrls.end(), [&videoList](Json::Value &v) {
+		Json::Value s;
+		videoList[v.get("name", s).asString()] = v.get("url", s).asString();
+	});
+
+	return true;
+}
+
 /* ---------------------------------------------------------------------------
 **  main
 ** -------------------------------------------------------------------------*/
@@ -29,7 +72,7 @@ int main(int argc, char* argv[])
 	const char* defaultlocalstunurl  = "0.0.0.0:3478";
 	const char* localstunurl  = NULL;
 	const char* stunurl       = "stun.l.google.com:19302";
-	int logLevel              = rtc::LERROR;
+	int logLevel = rtc::LS_NONE; // rtc::LERROR;
 	const char* webroot       = "./html";
 	std::string sslCertificate;
 	webrtc::AudioDeviceModule::AudioLayer audioLayer = webrtc::AudioDeviceModule::kPlatformDefaultAudio;
@@ -50,7 +93,7 @@ int main(int argc, char* argv[])
 	httpAddress.append(httpPort);
 
 	int c = 0;
-	while ((c = getopt (argc, argv, "hVv::" "c:H:w:T:A:" "t:S::s::" "a::q:" "n:u:U:")) != -1)
+	while ((c = getopt (argc, argv, "hVv::" "c:H:w:T:A:" "t:S::s::" "a::q:" "n:u:U:" "f:")) != -1)
 	{
 		switch (c)
 		{
@@ -91,6 +134,13 @@ int main(int argc, char* argv[])
 				std::cout << VERSION << std::endl;
 				exit(0);
 			break;
+			/* add by sunghyun kim for file load */
+			case 'f': {
+				std::string file = optarg;
+				std::cout << "filename : " << optarg << std::endl;
+				UrlLoadFromJsonFile(file, urlVideoList);
+			}
+			break;
 			case 'h':
 			default:
 				std::cout << argv[0] << " [-H http port] [-S[embeded stun address]] [-t [username:password@]turn_address] -[v[v]]  [url1]...[urln]" << std::endl;
@@ -108,6 +158,8 @@ int main(int argc, char* argv[])
 
 				std::cout << "\t -a[audio layer]    : spefify audio capture layer to use (default:" << audioLayer << ")"          << std::endl;
 				std::cout << "\t -n name -u videourl -U audiourl : register a stream with name using url"                         << std::endl;
+
+				std::cout << "\t -f filename        : read url list from file" << std::endl;
 			
 				std::cout << "\t [url]              : url to register in the source list"                                         << std::endl;
 			
